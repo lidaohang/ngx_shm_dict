@@ -42,4 +42,12 @@ git clone https://github.com/lidaohang/ngx_shm_dict_view
     }
 ```
 
+## Test
+
+```
+curl "http://127.0.0.1:8011/set?zone=test&key=abc&value=123&exptime=100"
+curl "http://127.0.0.1:8011/get?zone=test&key=abc"
+curl "http://127.0.0.1:8011/del?zone=test&key=abc"
+	
+```
 
