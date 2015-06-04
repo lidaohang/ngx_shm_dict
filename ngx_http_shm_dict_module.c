@@ -4,13 +4,13 @@
 static void *ngx_http_shm_dict_create_main_conf(ngx_conf_t *cf);
 
 
-static char*  ngx_http_ah_shm_zone(ngx_conf_t *cf,ngx_command_t *cmd, void *conf);
+static char*  ngx_http_ngx_shm_zone(ngx_conf_t *cf,ngx_command_t *cmd, void *conf);
 
 static ngx_command_t  ngx_http_shm_dict_commands[] = {
 
-      { ngx_string("ah_shm_dict_zone"),
+      { ngx_string("ngx_shm_dict_zone"),
       NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1|NGX_CONF_TAKE2|NGX_CONF_TAKE3,
-      ngx_http_ah_shm_zone,
+      ngx_http_ngx_shm_zone,
       0,
       0,
       NULL },
@@ -64,7 +64,7 @@ ngx_http_shm_dict_create_main_conf(ngx_conf_t *cf) {
 
 
 static char * 
-ngx_http_ah_shm_zone(ngx_conf_t *cf, ngx_command_t *cmd, void *conf){
+ngx_http_ngx_shm_zone(ngx_conf_t *cf, ngx_command_t *cmd, void *conf){
 		ngx_http_shm_dict_main_conf_t *conf_t = (ngx_http_shm_dict_main_conf_t*)conf;
 	    ssize_t                    size;
 	    ngx_str_t                 *value, name, s;
@@ -91,23 +91,23 @@ ngx_http_ah_shm_zone(ngx_conf_t *cf, ngx_command_t *cmd, void *conf){
 	            size = ngx_parse_size(&s);
 				
 	            if (size == NGX_ERROR) {
-	                ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,"[ah_shm_zone] invalid zone size \"%V\"", &value[i]);
+	                ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,"[ngx_shm_zone] invalid zone size \"%V\"", &value[i]);
 	                return NGX_CONF_ERROR;
 	            }
 
 	            if (size < (ssize_t) (8 * ngx_pagesize)) {
-	                ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,"[ah_shm_zone] zone \"%V\" is too small", &value[i]);
+	                ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,"[ngx_shm_zone] zone \"%V\" is too small", &value[i]);
 	                return NGX_CONF_ERROR;
 	            }
 	            continue;
 	        }
 
-	        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,"[ah_shm_zone] invalid parameter \"%V\"", &value[i]);
+	        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,"[ngx_shm_zone] invalid parameter \"%V\"", &value[i]);
 	        return NGX_CONF_ERROR;
 	    }
 
 	    if (name.len == 0) {
-	        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,"[ah_shm_zone] \"%V\" must have \"zone\" parameter",
+	        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,"[ngx_shm_zone] \"%V\" must have \"zone\" parameter",
 	                           &cmd->name);
 	        return NGX_CONF_ERROR;
 	    }
@@ -130,7 +130,7 @@ ngx_http_ah_shm_zone(ngx_conf_t *cf, ngx_command_t *cmd, void *conf){
 			
 			for (i = 0; i < conf_t->shm_dict_list->nelts; i++) {
 				if ( ngx_strcmp(name.data,zone_t[i]->shm.name.data) == 0 ) {
-					ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,"[ah_shm_zone] shm_dict_name repeat loading %s ",name);
+					ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,"[ngx_shm_zone] shm_dict_name repeat loading %s ",name);
 					return NGX_CONF_OK;
 				}	
 			}
@@ -139,7 +139,7 @@ ngx_http_ah_shm_zone(ngx_conf_t *cf, ngx_command_t *cmd, void *conf){
 
 	ngx_shm_zone_t* zone = ngx_shm_dict_init(cf,&name, size,&ngx_http_shm_dict_module);
 	if(zone == NULL){
-		ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,"[ah_shm_zone] ngx_pcalloc ngx_shm_dict_init is error");
+		ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,"[ngx_shm_zone] ngx_pcalloc ngx_shm_dict_init is error");
 		return NGX_CONF_ERROR;
 	}
 
@@ -149,7 +149,7 @@ ngx_http_ah_shm_zone(ngx_conf_t *cf, ngx_command_t *cmd, void *conf){
 	}
 	*zp = zone;
 
-	ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,"[ah_shm_zone] array shm_dict_list is ok");
+	ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,"[ngx_shm_zone] array shm_dict_list is ok");
 	printf("process [%d] inited!\n", ngx_getpid());
 	
     return NGX_CONF_OK;
