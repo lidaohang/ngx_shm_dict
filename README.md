@@ -33,7 +33,7 @@ git clone https://github.com/lidaohang/ngx_shm_dict_view
 
 
     server {
-        listen       8012;
+        listen       8011;
         server_name  localhost;
 
 		location / {
