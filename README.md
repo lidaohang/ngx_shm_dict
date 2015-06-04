@@ -37,7 +37,7 @@ git clone https://github.com/lidaohang/ngx_shm_dict_view
         server_name  localhost;
 
 		location / {
-            ah_shm_dict_view;
+            ngx_shm_dict_view;
 		}
     }
 ```
