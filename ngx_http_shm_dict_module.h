@@ -5,9 +5,9 @@
 #include <ngx_core.h>
 #include <ngx_http.h>
 
-typedef struct {
-    ngx_array_t *shm_dict_list;
-} ngx_http_shm_dict_main_conf_t;
+#include "ngx_shm_dict.h"
 
+
+ngx_array_t *g_shm_dict_list;
 
 #endif
