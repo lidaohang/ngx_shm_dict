@@ -4,6 +4,7 @@ HTTP_MODULES="$HTTP_MODULES ngx_http_shm_dict_module"
 
 NGX_ADDON_SRCS="$NGX_ADDON_SRCS 
 $ngx_addon_dir/ngx_http_shm_dict_module.c
+$ngx_addon_dir/ngx_shm_dict_handler.c
 $ngx_addon_dir/ngx_shm_dict.c"
 
 CFLAGS="$CFLAGS -I$ngx_addon_dir -DNGX_SHMAP"
