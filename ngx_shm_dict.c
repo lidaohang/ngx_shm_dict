@@ -1,46 +1,109 @@
 #include "ngx_shm_dict.h"
 #include <assert.h>
 
-static int ngx_shm_dict_set_helper(ngx_shm_zone_t* zone, ngx_str_t* key, ngx_str_t* value,
-			uint8_t value_type, uint32_t exptime, uint32_t user_flags, int flags);
+
 ngx_int_t ngx_shm_dict_init_zone(ngx_shm_zone_t *shm_zone, void *data);
 
-#define NGX_SHARED_MAP_ADD         0x0001
-#define NGX_SHARED_MAP_REPLACE     0x0002
-#define NGX_SHARED_MAP_SAFE_STORE  0x0004
-#define NGX_SHARED_MAP_DELETE	   0x0008
 
 void ngx_str_set_int32(ngx_str_t* key, int32_t* value)
 {
 	key->len= sizeof(int32_t);
 	key->data = (u_char*)value;
 }
+
+
 void ngx_str_set_int64(ngx_str_t* key, int64_t* value)
 {
 	key->len= sizeof(int64_t);
 	key->data = (u_char*)value;
 }
+
+
 void ngx_str_set_double(ngx_str_t* key, double* value)
 {
 	key->len= sizeof(double);
 	key->data = (u_char*)value;
 }
 
+
 ngx_inline uint32_t ngx_shm_dict_crc32(u_char *p, size_t len)
 {
-	if(len == sizeof(ngx_int_t)){
+	if(len == sizeof(ngx_int_t)) {
+	
 		uint32_t* pi = (uint32_t*)p;
-		return *pi;
-	}else{
+		return *pi;	
+	}
+	else {
 		return ngx_crc32_short(p, len);
 	}
 }
+
+
+char *
+ngx_strtok_r(char *s, const char *delim, char **last)
+{
+    char *spanp;
+    int c, sc;
+    char *tok;
+
+    if (s == NULL && (s = *last) == NULL) {
+	
+		return NULL;
+    }
+
+    /*
+     * Skip (span) leading delimiters (s += strspn(s, delim), sort of).
+     */
+cont:
+    c = *s++;
+    for (spanp = (char *)delim; (sc = *spanp++) != 0; ) {
+	
+		if (c == sc) {
+			goto cont;
+		}
+    }
+	 /* no non-delimiter characters */
+    if (c == 0) {
+		*last = NULL;
+		return NULL;
+    }
+    tok = s - 1;
+
+    /*
+     * Scan token (scan for delimiters: s += strcspn(s, delim), sort of).
+     * Note that delim must have one NUL; we stop if we see that, too.
+     */
+    for (;;) {
+	
+		c = *s++;
+		spanp = (char *)delim;
+		
+		do {
+			if ((sc = *spanp++) == c) {
+			
+				if (c == 0)	{
+					s = NULL;
+				}
+				else {
+					char *w = s - 1;
+					*w = '\0';
+				}
+				*last = s;
+				return tok;
+			}
+		}
+		while (sc != 0);
+    }
+    /* NOTREACHED */
+}
+
 
 ngx_shm_zone_t* 
 ngx_shm_dict_init(ngx_conf_t *cf, ngx_str_t* name, size_t size, void* module)
 {
 	ngx_shm_dict_ctx_t* 			ctx;
-	ngx_shm_zone_t             *zone;
+	ngx_shm_zone_t                  *zone;
+	
     ctx = ngx_pcalloc(cf->pool, sizeof(ngx_shm_dict_ctx_t));
     if (ctx == NULL) {
         return NULL; 
@@ -56,12 +119,12 @@ ngx_shm_dict_init(ngx_conf_t *cf, ngx_str_t* name, size_t size, void* module)
     ctx->name = *name;
     ctx->log = &cf->cycle->new_log;
 
-
+	
     if (zone->data) {
         ctx = zone->data;
 
         ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-                           "lua_shared_dict \"%V\" is already defined as "
+                           "[ngx_shm_dict] ngx_shm_dict_init \"%V\" is already defined as "
                            "\"%V\"", name, &ctx->name);
         return NULL;
     }
@@ -72,12 +135,13 @@ ngx_shm_dict_init(ngx_conf_t *cf, ngx_str_t* name, size_t size, void* module)
   	return zone;
 }
 
+
 static void
 ngx_shm_dict_rbtree_insert_value(ngx_rbtree_node_t *temp,
     ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel)
 {
     ngx_rbtree_node_t          **p;
-    ngx_shm_dict_node_t   *sdn, *sdnt;
+    ngx_shm_dict_node_t   	   *sdn, *sdnt;
 
     for ( ;; ) {
 
@@ -117,12 +181,9 @@ ngx_int_t
 ngx_shm_dict_init_zone(ngx_shm_zone_t *shm_zone, void *data)
 {
     ngx_shm_dict_ctx_t  *octx = data;
-
-    size_t                      len;
-    ngx_shm_dict_ctx_t  *ctx;
-    //ngx_http_lua_main_conf_t   *lmcf;
-
-    //dd("init zone");
+	ngx_shm_dict_ctx_t  *ctx;
+    size_t              len;
+    
 
     ctx = shm_zone->data;
 
@@ -168,17 +229,19 @@ done:
     return NGX_OK;
 }
 
+
+
 static ngx_int_t
 ngx_shm_dict_lookup(ngx_shm_zone_t *shm_zone, ngx_uint_t hash,
     u_char *kdata, size_t klen, ngx_shm_dict_node_t **sdp)
 {
     ngx_int_t                    rc;
-    ngx_time_t                  *tp;
+    ngx_time_t                   *tp;
     uint64_t                     now;
     int64_t                      ms;
-    ngx_rbtree_node_t           *node, *sentinel;
-    ngx_shm_dict_ctx_t   *ctx;
-    ngx_shm_dict_node_t  *sd;
+    ngx_rbtree_node_t            *node, *sentinel;
+    ngx_shm_dict_ctx_t   		 *ctx;
+    ngx_shm_dict_node_t  		 *sd;
 
     ctx = shm_zone->data;
 
@@ -204,12 +267,11 @@ ngx_shm_dict_lookup(ngx_shm_zone_t *shm_zone, ngx_uint_t hash,
         rc = ngx_memn2cmp(kdata, sd->data, klen, (size_t) sd->key_len);
 
         if (rc == 0) {
+		
             ngx_queue_remove(&sd->queue);
             ngx_queue_insert_head(&ctx->sh->queue, &sd->queue);
 
             *sdp = sd;
-
-            //dd("node expires: %lld", (long long) sd->expires);
 
             if (sd->expires != 0) {
                 tp = ngx_timeofday();
@@ -217,10 +279,8 @@ ngx_shm_dict_lookup(ngx_shm_zone_t *shm_zone, ngx_uint_t hash,
                 now = (uint64_t) tp->sec * 1000 + tp->msec;
                 ms = sd->expires - now;
 
-                //dd("time to live: %lld", (long long) ms);
-
                 if (ms < 0) {
-                    //dd("node already expired");
+                 
                     return NGX_DONE;
                 }
             }
@@ -237,16 +297,48 @@ ngx_shm_dict_lookup(ngx_shm_zone_t *shm_zone, ngx_uint_t hash,
 }
 
 
+ngx_int_t
+ngx_shm_dict_count(ngx_shm_zone_t *shm_zone)
+{
+    ngx_rbtree_node_t           *node, *sentinel;
+    ngx_shm_dict_ctx_t   *ctx;
+	int count = 0;
+
+    ctx = shm_zone->data;
+
+    node = ctx->sh->rbtree.root;
+    sentinel = ctx->sh->rbtree.sentinel;
+
+    while (node != sentinel) {
+	
+		count++;
+		
+		if (node->left != sentinel) {
+			
+			node = node->left;
+			continue;
+		}
+
+		if (node->right != sentinel) {
+			
+			node = node->right;
+			continue;
+		}
+	}
+	return count;
+}
+
+
 static int
 ngx_shm_dict_expire(ngx_shm_dict_ctx_t *ctx, ngx_uint_t n)
 {
     ngx_time_t                  *tp;
-    uint64_t                     now;
+    uint64_t                    now;
     ngx_queue_t                 *q;
-    int64_t                      ms;
+    int64_t                     ms;
     ngx_rbtree_node_t           *node;
-    ngx_shm_dict_node_t  *sd;
-    int                          freed = 0;
+    ngx_shm_dict_node_t  		*sd;
+    int                         freed = 0;
 
     tp = ngx_timeofday();
 
@@ -295,104 +387,44 @@ ngx_shm_dict_expire(ngx_shm_dict_ctx_t *ctx, ngx_uint_t n)
     return freed;
 }
 
-int
-ngx_shm_dict_get_int32(ngx_shm_zone_t* zone, ngx_str_t* key, int32_t* i)
-{
-	uint8_t value_type = SHM_NULL;
-	ngx_str_t data = ngx_null_string;
-	int ret = ngx_shm_dict_get(zone, key, &data, &value_type,NULL,NULL);
-	if(ret == 0){
-		if(value_type != SHM_INT32){
-			ret = -1;
-			
-		}else{
-			int32_t* p = (int32_t*)data.data;
-			*i = *p;
-		}
-	}
-	return ret;
-}
-
-int
-ngx_shm_dict_get_int64(ngx_shm_zone_t* zone, ngx_str_t* key, int64_t* i)
-{
-	uint8_t value_type = SHM_NULL;
-	ngx_str_t data = ngx_null_string;
-	int ret = ngx_shm_dict_get(zone, key, &data, &value_type,NULL,NULL);
-	if(ret == 0){
-		if(value_type != SHM_INT64){
-			ret = -1;
-			
-		}else{
-			int64_t* p = (int64_t*)data.data;
-			*i = *p;
-		}
-	}
-	return ret;
-}
-
-int
-ngx_shm_dict_get_int64_and_clear(ngx_shm_zone_t* zone, ngx_str_t* key, int64_t* i)
-{
-	uint8_t value_type = SHM_NULL;
-	ngx_str_t data = ngx_null_string;
-	int ret = ngx_shm_dict_get(zone, key, &data, &value_type,NULL,NULL);
-	if(ret == 0){
-		if(value_type != SHM_INT64){
-			ret = -1;
-			
-		}else{
-			int64_t* p = (int64_t*)data.data;
-			*i = __sync_fetch_and_and(p, 0);
-		}
-	}
-	return ret;
-}
 
 int
 ngx_shm_dict_get(ngx_shm_zone_t* zone, ngx_str_t* key,
 		ngx_str_t* data, uint8_t* value_type,uint32_t* exptime,
 		uint32_t* user_flags)
 {
-    //ngx_str_t                    name;
     uint32_t                     hash;
     ngx_int_t                    rc;
-    ngx_shm_dict_ctx_t   *ctx;
-    ngx_shm_dict_node_t  *sd;
+    ngx_shm_dict_ctx_t   		 *ctx;
+    ngx_shm_dict_node_t  		 *sd;
+	
 	assert(zone != NULL);
 	assert(key != NULL);
 	assert(data != NULL);
 	
     ctx = zone->data;
 
-    //name = ctx->name;
-
     if (key->len == 0 || key->len > 65535) {
-        return -1;
+        return SHM_ERROR;
     }
 
     hash = ngx_shm_dict_crc32(key->data, key->len);
 
     ngx_shmtx_lock(&ctx->shpool->mutex);
 
-#if 1
-    ngx_shm_dict_expire(ctx, 1);
+#if NGX_SHM_DICT_EXPIRE
+    ngx_shm_dict_expire(ctx, NGX_SHM_DICT_EXPIRE_COUNT);
 #endif
  
     rc = ngx_shm_dict_lookup(zone, hash, key->data, key->len, &sd);
 
-    //dd("shdict lookup returns %d", (int) rc);
-
     if (rc == NGX_DECLINED || rc == NGX_DONE) {
+	
         ngx_shmtx_unlock(&ctx->shpool->mutex);
-        return -1;
+        return SHM_ERROR;
     }
 
     /* rc == NGX_OK */
-
-
-    //dd("data: %p", sd->data);
-    //dd("key len: %d", (int) sd->key_len);
 
     data->data = sd->data + sd->key_len;
     data->len = (size_t) sd->value_len;
@@ -400,89 +432,320 @@ ngx_shm_dict_get(ngx_shm_zone_t* zone, ngx_str_t* key,
 	if(value_type) *value_type = sd->value_type;
     if(user_flags) *user_flags = sd->user_flags;
 	if(exptime){
-		if(sd->expires == 0){
-			*exptime = 0;
-		}else{
-			ngx_time_t* tp = ngx_timeofday();
-			*exptime = (sd->expires-((uint64_t) tp->sec * 1000 + tp->msec))/1000;
-		}
-	}
-    ngx_shmtx_unlock(&ctx->shpool->mutex);
-
-    return 0;
-}
-
-int
-ngx_shm_dict_get_ex(ngx_shm_zone_t* zone, ngx_str_t* key,
-		ngx_str_t* data, uint8_t* value_type,uint32_t* exptime,
-		uint32_t** user_flags)
-{
-    //ngx_str_t                    name;
-    uint32_t                     hash;
-    ngx_int_t                    rc;
-    ngx_shm_dict_ctx_t   *ctx;
-    ngx_shm_dict_node_t  *sd;
-	assert(zone != NULL);
-	assert(key != NULL);
-	assert(data != NULL);
 	
-    ctx = zone->data;
-
-    //name = ctx->name;
-
-    if (key->len == 0 || key->len > 65535) {
-        return -1;
-    }
-
-    hash = ngx_shm_dict_crc32(key->data, key->len);
-
-    ngx_shmtx_lock(&ctx->shpool->mutex);
-
-#if 1
-    ngx_shm_dict_expire(ctx, 1);
-#endif
- 
-    rc = ngx_shm_dict_lookup(zone, hash, key->data, key->len, &sd);
-
-    //dd("shdict lookup returns %d", (int) rc);
-
-    if (rc == NGX_DECLINED || rc == NGX_DONE) {
-        ngx_shmtx_unlock(&ctx->shpool->mutex);
-        return -1;
-    }
-
-    /* rc == NGX_OK */
-
-
-    //dd("data: %p", sd->data);
-    //dd("key len: %d", (int) sd->key_len);
-
-    data->data = sd->data + sd->key_len;
-    data->len = (size_t) sd->value_len;
-
-	if(value_type) *value_type = sd->value_type;
-    if(user_flags) *user_flags = &sd->user_flags;
-	if(exptime){ 
-		if(sd->expires == 0){
+		if(sd->expires == 0) {
 			*exptime = 0;
-		}else{
+		}else {
 			ngx_time_t* tp = ngx_timeofday();
 			*exptime = (sd->expires-((uint64_t) tp->sec * 1000 + tp->msec))/1000;
 		}
 	}
+	
     ngx_shmtx_unlock(&ctx->shpool->mutex);
 
-    return 0;
+    return SHM_OK;
 }
+
 
 int
 ngx_shm_dict_delete(ngx_shm_zone_t* zone, ngx_str_t* key)
 {
+    uint32_t                     hash;
+    ngx_int_t                    rc;
+    ngx_shm_dict_ctx_t   		 *ctx;
+    ngx_shm_dict_node_t  		 *sd;
+    ngx_rbtree_node_t            *node;
+
 	assert(zone != NULL);
 	assert(key != NULL);
-   	return ngx_shm_dict_set_helper(zone,key, NULL, SHM_NULL,0,0,NGX_SHARED_MAP_DELETE);
+
+    ctx = zone->data;
+
+    hash = ngx_shm_dict_crc32(key->data, key->len);
+
+    ngx_shmtx_lock(&ctx->shpool->mutex);
+	
+#if NGX_SHM_DICT_EXPIRE
+    ngx_shm_dict_expire(ctx, NGX_SHM_DICT_EXPIRE_COUNT);
+#endif
+
+    rc = ngx_shm_dict_lookup(zone, hash, key->data, key->len, &sd);
+
+	if (rc == NGX_DECLINED || rc == NGX_DONE) {
+		ngx_shmtx_unlock(&ctx->shpool->mutex);
+		//not exists
+		return SHM_OK;
+	}
+
+	ngx_queue_remove(&sd->queue);
+
+	node = (ngx_rbtree_node_t *)
+			   ((u_char *) sd - offsetof(ngx_rbtree_node_t, color));
+
+	ngx_rbtree_delete(&ctx->sh->rbtree, node);
+	ngx_slab_free_locked(ctx->shpool, node);
+	
+	ngx_shmtx_unlock(&ctx->shpool->mutex);
+	
+	return SHM_OK;
 }
  
+
+int
+ngx_shm_dict_flush_expired(ngx_shm_zone_t* zone, int attempts)
+{
+    ngx_queue_t                 *q, *prev;
+    ngx_shm_dict_node_t  		*sd;
+    ngx_shm_dict_ctx_t   		*ctx;
+    ngx_time_t                  *tp;
+    int                         freed = 0;
+    ngx_rbtree_node_t           *node;
+    uint64_t                    now;
+	
+	assert(zone != NULL);
+
+    ctx = zone->data;
+
+    ngx_shmtx_lock(&ctx->shpool->mutex);
+
+    if (ngx_queue_empty(&ctx->sh->queue)) {
+    	ngx_shmtx_unlock(&ctx->shpool->mutex);
+        return SHM_OK;
+    }
+
+    tp = ngx_timeofday();
+
+    now = (uint64_t) tp->sec * 1000 + tp->msec;
+
+    q = ngx_queue_last(&ctx->sh->queue);
+
+    while (q != ngx_queue_sentinel(&ctx->sh->queue)) {
+        prev = ngx_queue_prev(q);
+
+        sd = ngx_queue_data(q, ngx_shm_dict_node_t, queue);
+
+        if (sd->expires != 0 && sd->expires <= now) {
+		
+            ngx_queue_remove(q);
+
+            node = (ngx_rbtree_node_t *)
+                ((u_char *) sd - offsetof(ngx_rbtree_node_t, color));
+
+            ngx_rbtree_delete(&ctx->sh->rbtree, node);
+            ngx_slab_free_locked(ctx->shpool, node);
+            freed++;
+
+            if (attempts && freed == attempts) {
+                break;
+            }
+        }
+
+        q = prev;
+    }
+
+    ngx_shmtx_unlock(&ctx->shpool->mutex);
+
+    return freed;
+}
+
+
+int
+ngx_shm_dict_set(ngx_shm_zone_t* zone, ngx_str_t* key, ngx_str_t* value,
+			uint8_t value_type, uint32_t exptime, uint32_t user_flags)
+{
+	
+	int                          i, size;
+    uint32_t                     hash;
+    ngx_int_t                    rc;
+    ngx_shm_dict_ctx_t   		 *ctx;
+    ngx_shm_dict_node_t  		 *sd;
+    u_char                       *p;
+    ngx_rbtree_node_t            *node;
+    ngx_time_t                   *tp;
+	
+	assert(zone != NULL);
+	assert(key != NULL);
+	assert(value != NULL);
+	
+    ctx = zone->data;
+ 
+
+    if (key->len == 0 || key->len > 65535) {
+        return SHM_ERROR;
+    }
+
+    hash = ngx_shm_dict_crc32(key->data, key->len);
+    ngx_shmtx_lock(&ctx->shpool->mutex);
+
+#if NGX_SHM_DICT_EXPIRE
+    ngx_shm_dict_expire(ctx, NGX_SHM_DICT_EXPIRE_COUNT);
+#endif
+
+    rc = ngx_shm_dict_lookup(zone, hash, key->data, key->len, &sd);
+	
+	//如果不存在，则插入新的
+	if (rc == NGX_DECLINED || rc == NGX_DONE) {
+		//not exists
+		goto insert;
+	}
+
+//update
+	if (value->data && value->len == (size_t) sd->value_len) {
+		
+		ngx_queue_remove(&sd->queue);
+		ngx_queue_insert_head(&ctx->sh->queue, &sd->queue);
+
+		sd->key_len = key->len;
+
+		if (exptime > 0) {
+		
+			tp = ngx_timeofday();
+			sd->expires = (uint64_t) tp->sec * 1000 + tp->msec
+						  + exptime * 1000;
+		} else {
+			sd->expires = 0;
+		}
+	
+		sd->user_flags = user_flags;
+		sd->value_len = (uint32_t) value->len;
+		sd->value_type = value_type;
+
+		p = ngx_copy(sd->data, key->data, key->len);
+		ngx_memcpy(p, value->data, value->len);
+
+		ngx_shmtx_unlock(&ctx->shpool->mutex);
+
+		return SHM_OK;
+	}
+	
+//remove
+	ngx_queue_remove(&sd->queue);
+
+	node = (ngx_rbtree_node_t *)
+			   ((u_char *) sd - offsetof(ngx_rbtree_node_t, color));
+
+	ngx_rbtree_delete(&ctx->sh->rbtree, node);
+	ngx_slab_free_locked(ctx->shpool, node);	
+	
+insert:
+  
+    size = offsetof(ngx_rbtree_node_t, color)
+        + offsetof(ngx_shm_dict_node_t, data)
+        + key->len
+        + value->len;
+
+    node = ngx_slab_alloc_locked(ctx->shpool, size);
+    if (node == NULL) {
+
+        for (i = 0; i < 30; i++) {
+            if (ngx_shm_dict_expire(ctx, 0) == 0) {
+                break;
+            }
+
+            node = ngx_slab_alloc_locked(ctx->shpool, size);
+            if (node == NULL) {
+                goto allocated;
+            }
+        }
+		
+        ngx_shmtx_unlock(&ctx->shpool->mutex);
+		return SHM_ERROR;
+    }
+
+allocated:
+    sd = (ngx_shm_dict_node_t *) &node->color;
+ 
+    node->key = hash;
+    sd->key_len = key->len;
+
+    if (exptime > 0) {
+        tp = ngx_timeofday();
+        sd->expires = (uint64_t) tp->sec * 1000 + tp->msec
+                      + exptime * 1000;
+
+    } else {
+        sd->expires = 0;
+    }
+
+    sd->user_flags = user_flags;
+    sd->value_len = (uint32_t) value->len;
+    sd->value_type = value_type;
+
+    p = ngx_copy(sd->data, key->data, key->len);
+    ngx_memcpy(p, value->data, value->len);
+
+    ngx_rbtree_insert(&ctx->sh->rbtree, node);
+    ngx_queue_insert_head(&ctx->sh->queue, &sd->queue);
+	
+    ngx_shmtx_unlock(&ctx->shpool->mutex);
+
+    return SHM_OK;
+}
+
+
+int 
+ngx_shm_dict_inc_int(ngx_shm_zone_t* zone, ngx_str_t* key,int64_t i,uint32_t exptime, int64_t* ret)
+{
+	ngx_int_t rc = 0;
+	ngx_str_t data = ngx_null_string;
+	uint8_t value_type = SHM_INT64;
+
+	assert(zone != NULL);
+	assert(key != NULL);
+	assert(ret != NULL);
+	
+	rc = ngx_shm_dict_get(zone, key, &data, &value_type, NULL,NULL);
+	if(rc == SHM_OK) {
+	
+		if(value_type != SHM_INT64) {
+			return SHM_ERROR;
+		}
+		int64_t* p = (int64_t*)data.data;
+		*ret = __sync_add_and_fetch(p, i);
+	}
+	else {
+		//不存在，插入新的
+		ngx_str_set_int64(&data, &i);
+
+		rc =ngx_shm_dict_set(zone, key, &data, value_type, exptime,0);
+		if(rc == SHM_OK) {
+			*ret = i;
+		}
+	}
+	
+	return rc;
+}
+
+
+int 
+ngx_shm_dict_foreach(ngx_shm_zone_t* zone, foreach_pt func, void* args)
+{
+    ngx_queue_t                 *q;
+    ngx_shm_dict_node_t  		*sd;
+    ngx_shm_dict_ctx_t   		*ctx;
+	
+	assert(zone != NULL);
+
+    ctx = zone->data;
+
+    int locked = ngx_shmtx_trylock(&ctx->shpool->mutex);
+	if (!locked){
+		return SHM_ERROR;
+	}
+	
+    for (q = ngx_queue_head(&ctx->sh->queue);
+         q != ngx_queue_sentinel(&ctx->sh->queue);
+         q = ngx_queue_next(q)) 
+	{	 
+        sd = ngx_queue_data(q, ngx_shm_dict_node_t, queue);
+   		func(sd, args);
+    }
+
+    ngx_shmtx_unlock(&ctx->shpool->mutex);
+
+    return SHM_OK;
+}
+
 
 int
 ngx_shm_dict_flush_all(ngx_shm_zone_t* zone)
@@ -508,652 +771,5 @@ ngx_shm_dict_flush_all(ngx_shm_zone_t* zone)
 
     ngx_shmtx_unlock(&ctx->shpool->mutex);
 
-    return 0;
+    return SHM_OK;
 }
-
-
-int
-ngx_shm_dict_flush_expired(ngx_shm_zone_t* zone, int attempts)
-{
-    ngx_queue_t                 *q, *prev;
-    ngx_shm_dict_node_t  *sd;
-    ngx_shm_dict_ctx_t   *ctx;
-    ngx_time_t                  *tp;
-    int                          freed = 0;
-    ngx_rbtree_node_t           *node;
-    uint64_t                     now;
-	assert(zone != NULL);
-
-    ctx = zone->data;
-
-    ngx_shmtx_lock(&ctx->shpool->mutex);
-
-    if (ngx_queue_empty(&ctx->sh->queue)) {
-        return 0;
-    }
-
-    tp = ngx_timeofday();
-
-    now = (uint64_t) tp->sec * 1000 + tp->msec;
-
-    q = ngx_queue_last(&ctx->sh->queue);
-
-    while (q != ngx_queue_sentinel(&ctx->sh->queue)) {
-        prev = ngx_queue_prev(q);
-
-        sd = ngx_queue_data(q, ngx_shm_dict_node_t, queue);
-
-        if (sd->expires != 0 && sd->expires <= now) {
-            ngx_queue_remove(q);
-
-            node = (ngx_rbtree_node_t *)
-                ((u_char *) sd - offsetof(ngx_rbtree_node_t, color));
-
-            ngx_rbtree_delete(&ctx->sh->rbtree, node);
-            ngx_slab_free_locked(ctx->shpool, node);
-            freed++;
-
-            if (attempts && freed == attempts) {
-                break;
-            }
-        }
-
-        q = prev;
-    }
-
-    ngx_shmtx_unlock(&ctx->shpool->mutex);
-
-    return freed;
-}
-
-int
-ngx_shm_dict_add(ngx_shm_zone_t* zone, ngx_str_t* key, ngx_str_t* value,
-			uint8_t value_type, uint32_t exptime, uint32_t user_flags)
-{
-	assert(zone != NULL);
-	assert(key != NULL);
-	assert(value != NULL);
-    return ngx_shm_dict_set_helper(zone,key,value,value_type,exptime,user_flags,
-						NGX_SHARED_MAP_ADD);
-}
-
-
-int
-ngx_shm_dict_safe_add(ngx_shm_zone_t* zone, ngx_str_t* key, ngx_str_t* value,
-			uint8_t value_type, uint32_t exptime, uint32_t user_flags)
-{
-	assert(zone != NULL);
-	assert(key != NULL);
-	assert(value != NULL);
-
-    return ngx_shm_dict_set_helper(zone,key,value,value_type,exptime,user_flags,
-				NGX_SHARED_MAP_ADD|NGX_SHARED_MAP_SAFE_STORE);
-}
-
-
-int
-ngx_shm_dict_replace(ngx_shm_zone_t* zone, ngx_str_t* key, ngx_str_t* value,
-			uint8_t value_type, uint32_t exptime, uint32_t user_flags)
-{
-	assert(zone != NULL);
-	assert(key != NULL);
-	assert(value != NULL);
-
-    return ngx_shm_dict_set_helper(zone,key,value,value_type,exptime,user_flags, NGX_SHARED_MAP_REPLACE);
-}
-
-
-int
-ngx_shm_dict_set(ngx_shm_zone_t* zone, ngx_str_t* key, ngx_str_t* value,
-			uint8_t value_type, uint32_t exptime, uint32_t user_flags)
-{
-	assert(zone != NULL);
-	assert(key != NULL);
-	assert(value != NULL);
-
-    return ngx_shm_dict_set_helper(zone,key,value,value_type,exptime,user_flags,0);
-}
-
-
-int 
-ngx_shm_dict_safe_set(ngx_shm_zone_t* zone, ngx_str_t* key, ngx_str_t* value,
-			uint8_t value_type, uint32_t exptime, uint32_t user_flags)
-{
-	assert(zone != NULL);
-	assert(key != NULL);
-	assert(value != NULL);
-
-    return ngx_shm_dict_set_helper(zone,key,value,value_type,exptime,user_flags,NGX_SHARED_MAP_SAFE_STORE);
-}
-
-
-int 
-ngx_shm_dict_inc_int(ngx_shm_zone_t* zone, ngx_str_t* key,int64_t i,uint32_t exptime, int64_t* ret)
-{
-	assert(zone != NULL);
-	assert(key != NULL);
-	assert(ret != NULL);
-	
-	ngx_int_t rc = 0;
-	ngx_str_t data = ngx_null_string;
-	uint8_t value_type = SHM_INT64;
-	rc = ngx_shm_dict_get(zone, key, &data, &value_type, NULL,NULL);
-	if(rc == 0){
-		if(value_type != SHM_INT64){
-			
-			return -1;
-		}
-		int64_t* p = (int64_t*)data.data;
-		*ret = __sync_add_and_fetch(p, i);
-	}else{
-		//�����ڣ������µ�
-		ngx_str_set_int64(&data, &i);
-		rc =ngx_shm_dict_set(zone, key, &data, value_type, exptime,0);
-		if(rc == 0){
-			*ret = i;
-		}
-	}
-	return rc;
-}
-
-int 
-ngx_shm_dict_inc_double(ngx_shm_zone_t* zone, ngx_str_t* key,double d,uint32_t exptime,double* ret)
-{
-	ngx_int_t rc = 0;
-	ngx_str_t data = ngx_null_string;
-	assert(zone != NULL);
-	assert(key != NULL);
-	assert(ret != NULL);
-	
-	uint8_t value_type = SHM_DOUBLE;
-	rc = ngx_shm_dict_get(zone, key, &data, &value_type, NULL,NULL);
-	if(rc == 0){
-		if(value_type != SHM_DOUBLE){
-			
-			return -1;
-		}
-		double* p = (double*)data.data;
-		//Ҫ�ĳ�ԭ�Ӳ���
-		*ret = (*p += d);
-	}else{
-		//�����ڣ������µ�
-		ngx_str_set_double(&data, &d);
-		rc =ngx_shm_dict_set(zone, key, &data, value_type, exptime,0);
-		if(rc == 0){
-			*ret = d;
-		}
-	}
-	return rc;
-}
-
-
-static int 
-ngx_shm_dict_set_helper(ngx_shm_zone_t* zone, ngx_str_t* key, ngx_str_t* value,
-			uint8_t value_type, uint32_t exptime, uint32_t user_flags, int flags)
-{
-    int                          i, n;
-    //ngx_str_t                    name;
-    uint32_t                     hash;
-    ngx_int_t                    rc;
-    ngx_shm_dict_ctx_t   *ctx;
-    ngx_shm_dict_node_t  *sd;
-    u_char                      *p;
-    ngx_rbtree_node_t           *node;
-    ngx_time_t                  *tp;
-    //int                          forcible = 0;
-                         /* indicates whether to foricibly override other
-                          * valid entries */
-
-    ctx = zone->data;
- 
-    //name = ctx->name;
-
-    if (key->len == 0 || key->len > 65535) {
-        return -1;
-    }
-
-    hash = ngx_shm_dict_crc32(key->data, key->len);
-
-    //dd("looking up key %s in shared dict %s", key->data, name.data);
-
-    ngx_shmtx_lock(&ctx->shpool->mutex);
-
-#if 1
-    ngx_shm_dict_expire(ctx, 1);
-#endif
-
-    rc = ngx_shm_dict_lookup(zone, hash, key->data, key->len, &sd);
-
-	
-	if (flags & NGX_SHARED_MAP_DELETE) {
-		if (rc == NGX_DECLINED || rc == NGX_DONE) {
-            ngx_shmtx_unlock(&ctx->shpool->mutex);
-			//not exists
-			return 0;
-		}
-	}
-
-    if (flags & NGX_SHARED_MAP_REPLACE) {
-
-        if (rc == NGX_DECLINED || rc == NGX_DONE) {
-            ngx_shmtx_unlock(&ctx->shpool->mutex);
-			//not exists
-			return -1;
-        }
-
-        /* rc == NGX_OK */
-
-        goto replace;
-    }
-
-    if (flags & NGX_SHARED_MAP_ADD) {
-
-        if (rc == NGX_OK) {
-            ngx_shmtx_unlock(&ctx->shpool->mutex);
-			//exists
-            return -1;
-        }
-
-        if (rc == NGX_DONE) {
-            /* exists but expired */
-            //dd("go to replace");
-            goto replace;
-        }
-
-        /* rc == NGX_DECLINED */
-        //dd("go to insert");
-        goto insert;
-    }
-
-    if (rc == NGX_OK || rc == NGX_DONE) {
-
-        if (value_type == SHM_NULL) {
-            goto remove;
-        }
-
-replace:
-        if (value->data && value->len == (size_t) sd->value_len) {
-			
-            ngx_queue_remove(&sd->queue);
-            ngx_queue_insert_head(&ctx->sh->queue, &sd->queue);
-
-            sd->key_len = key->len;
-
-            if (exptime > 0) {
-                tp = ngx_timeofday();
-                sd->expires = (uint64_t) tp->sec * 1000 + tp->msec
-                              + exptime * 1000;
-            } else {
-                sd->expires = 0;
-            }
-			//NLOG_DEBUG("sd->expires: %u", sd->expires);
-            sd->user_flags = user_flags;
-
-            sd->value_len = (uint32_t) value->len;
-
-            //dd("setting value type to %d", value_type);
-
-            sd->value_type = value_type;
-
-            p = ngx_copy(sd->data, key->data, key->len);
-            ngx_memcpy(p, value->data, value->len);
-
-            ngx_shmtx_unlock(&ctx->shpool->mutex);
-
-            return 0;
-        }
-
-remove:
-        ngx_queue_remove(&sd->queue);
-
-        node = (ngx_rbtree_node_t *)
-                   ((u_char *) sd - offsetof(ngx_rbtree_node_t, color));
-
-        ngx_rbtree_delete(&ctx->sh->rbtree, node);
-
-        ngx_slab_free_locked(ctx->shpool, node);
-        if (value_type == SHM_NULL) {
-			ngx_shmtx_unlock(&ctx->shpool->mutex);
-			return 0;
-        }
-    }
-
-insert:
-    /* rc == NGX_DECLINED or value size unmatch */
-
-    if (value == NULL || value->data == NULL) {
-        ngx_shmtx_unlock(&ctx->shpool->mutex);
-
-        return -1;
-    }
-
-    n = offsetof(ngx_rbtree_node_t, color)
-        + offsetof(ngx_shm_dict_node_t, data)
-        + key->len
-        + value->len;
-
-    //NLOG_DEBUG("shmap set: creating a new entry(size=%d)", n);
-
-    node = ngx_slab_alloc_locked(ctx->shpool, n);
-
-    if (node == NULL) {
-
-        if (flags & NGX_SHARED_MAP_SAFE_STORE) {
-            ngx_shmtx_unlock(&ctx->shpool->mutex);
-
-			return -1;
-        }
-
-        for (i = 0; i < 30; i++) {
-            if (ngx_shm_dict_expire(ctx, 0) == 0) {
-                break;
-            }
-
-            //forcible = 1;
-
-            node = ngx_slab_alloc_locked(ctx->shpool, n);
-            if (node != NULL) {
-                goto allocated;
-            }
-        }
-
-        ngx_shmtx_unlock(&ctx->shpool->mutex);
-
-		return -1;
-    }
-
-allocated:
-    sd = (ngx_shm_dict_node_t *) &node->color;
- 
-    node->key = hash;
-    sd->key_len = key->len;
-
-    if (exptime > 0) {
-        tp = ngx_timeofday();
-        sd->expires = (uint64_t) tp->sec * 1000 + tp->msec
-                      + exptime * 1000;
-
-    } else {
-        sd->expires = 0;
-    }
-
-    sd->user_flags = user_flags;
-
-    sd->value_len = (uint32_t) value->len;
-
-    sd->value_type = value_type;
-
-    p = ngx_copy(sd->data, key->data, key->len);
-    ngx_memcpy(p, value->data, value->len);
-
-    ngx_rbtree_insert(&ctx->sh->rbtree, node);
-
-    ngx_queue_insert_head(&ctx->sh->queue, &sd->queue);
-
-    ngx_shmtx_unlock(&ctx->shpool->mutex);
-
-    return 0;
-}
-
-int 
-ngx_shm_dict_foreach(ngx_shm_zone_t* zone, foreach_pt func, void* args)
-{
-    ngx_queue_t                 *q;
-    ngx_shm_dict_node_t  *sd;
-    ngx_shm_dict_ctx_t   *ctx;
-	assert(zone != NULL);
-
-    ctx = zone->data;
-
-    int locked = ngx_shmtx_trylock(&ctx->shpool->mutex);
-	if (!locked){
-		return -1;
-	}
-	
-    for (q = ngx_queue_head(&ctx->sh->queue);
-         q != ngx_queue_sentinel(&ctx->sh->queue);
-         q = ngx_queue_next(q))
-    {
-        sd = ngx_queue_data(q, ngx_shm_dict_node_t, queue);
-   		func(sd, args);
-    }
-
-    ngx_shmtx_unlock(&ctx->shpool->mutex);
-
-    return 0;
-}
-
-#if 0
-static int
-ngx_shm_dict_incr(lua_State *L)
-{
-    int                          n;
-    ngx_str_t                    key;
-    uint32_t                     hash;
-    ngx_int_t                    rc;
-    ngx_shm_dict_ctx_t   *ctx;
-    ngx_shm_dict_node_t  *sd;
-    lua_Number                   num;
-    u_char                      *p;
-    ngx_shm_zone_t              *zone;
-    lua_Number                   value;
-
-    n = lua_gettop(L);
-
-    if (n != 3) {
-        return luaL_error(L, "expecting 3 arguments, but only seen %d", n);
-    }
-
-    luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
-
-    zone = lua_touserdata(L, 1);
-    if (zone == NULL) {
-        return luaL_error(L, "bad user data for the ngx_shm_zone_t pointer");
-    }
-
-    ctx = zone->data;
-
-    key->data = (u_char *) luaL_checklstring(L, 2, &key->len);
-
-    if (key->len == 0) {
-        return luaL_error(L, "attempt to use empty keys");
-    }
-
-    if (key->len > 65535) {
-        return luaL_error(L, "the key argument is more than 65535 bytes: %d",
-                          (int) key->len);
-    }
-
-    hash = ngx_shm_dict_crc32(key->data, key->len);
-
-    value = luaL_checknumber(L, 3);
-
-    dd("looking up key %.*s in shared dict %.*s", (int) key->len, key->data,
-       (int) ctx->name.len, ctx->name.data);
-
-    ngx_shmtx_lock(&ctx->shpool->mutex);
-
-    ngx_shm_dict_expire(ctx, 1);
-
-    rc = ngx_shm_dict_lookup(zone, hash, key->data, key->len, &sd);
-
-    dd("shdict lookup returned %d", (int) rc);
-
-    if (rc == NGX_DECLINED || rc == NGX_DONE) {
-        ngx_shmtx_unlock(&ctx->shpool->mutex);
-
-        lua_pushnil(L);
-        lua_pushliteral(L, "not found");
-        return 2;
-    }
-
-    /* rc == NGX_OK */
-
-    if (sd->value_type != LUA_TNUMBER || sd->value_len != sizeof(lua_Number)) {
-        ngx_shmtx_unlock(&ctx->shpool->mutex);
-
-        lua_pushnil(L);
-        lua_pushliteral(L, "not a number");
-        return 2;
-    }
-
-    ngx_queue_remove(&sd->queue);
-    ngx_queue_insert_head(&ctx->sh->queue, &sd->queue);
-
-    dd("setting value type to %d", (int) sd->value_type);
-
-    p = sd->data + key->len;
-
-    num = *(lua_Number *) p;
-    num += value;
-
-    ngx_memcpy(p, (lua_Number *) &num, sizeof(lua_Number));
-
-    ngx_shmtx_unlock(&ctx->shpool->mutex);
-
-    lua_pushnumber(L, num);
-    lua_pushnil(L);
-    return 2;
-}
-
-
-ngx_int_t
-ngx_http_lua_shared_dict_get(ngx_shm_zone_t *zone, u_char *key_data,
-    size_t key_len, ngx_http_lua_value_t *value)
-{
-    u_char                      *data;
-    size_t                       len;
-    uint32_t                     hash;
-    ngx_int_t                    rc;
-    ngx_shm_dict_ctx_t   *ctx;
-    ngx_shm_dict_node_t  *sd;
-
-    if (zone == NULL) {
-        return NGX_ERROR;
-    }
-
-    hash = ngx_shm_dict_crc32(key_data, key_len);
-
-    ctx = zone->data;
-
-    ngx_shmtx_lock(&ctx->shpool->mutex);
-
-    rc = ngx_shm_dict_lookup(zone, hash, key_data, key_len, &sd);
-
-    dd("shdict lookup returned %d", (int) rc);
-
-    if (rc == NGX_DECLINED || rc == NGX_DONE) {
-        ngx_shmtx_unlock(&ctx->shpool->mutex);
-
-        return rc;
-    }
-
-    /* rc == NGX_OK */
-
-    value->type = sd->value_type;
-
-    dd("type: %d", (int) value->type);
-
-    data = sd->data + sd->key_len;
-    len = (size_t) sd->value_len;
-
-    switch (value->type) {
-    case LUA_TSTRING:
-
-        if (value->value->s.data == NULL || value->value->s.len == 0) {
-            ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, 0, "no string buffer "
-                          "initialized");
-            return NGX_ERROR;
-        }
-
-        if (len > value->value->s.len) {
-            len = value->value->s.len;
-
-        } else {
-            value->value->s.len = len;
-        }
-
-        ngx_memcpy(value->value->s.data, data, len);
-        break;
-
-    case LUA_TNUMBER:
-
-        if (len != sizeof(lua_Number)) {
-            ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, 0, "bad lua number "
-                          "value size found for key %*s: %lu", key_len,
-                          key_data, (unsigned long) len);
-
-            ngx_shmtx_unlock(&ctx->shpool->mutex);
-            return NGX_ERROR;
-        }
-
-        ngx_memcpy(&value->value->b, data, len);
-        break;
-
-    case LUA_TBOOLEAN:
-
-        if (len != sizeof(u_char)) {
-            ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, 0, "bad lua boolean "
-                          "value size found for key %*s: %lu", key_len,
-                          key_data, (unsigned long) len);
-
-            ngx_shmtx_unlock(&ctx->shpool->mutex);
-            return NGX_ERROR;
-        }
-
-        value->value->b = *data;
-        break;
-
-    default:
-        ngx_log_error(NGX_LOG_ERR, ngx_cycle->log, 0, "bad lua value type "
-                      "found for key %*s: %d", key_len, key_data,
-                      (int) value->type);
-
-        ngx_shmtx_unlock(&ctx->shpool->mutex);
-        return NGX_ERROR;
-    }
-
-    ngx_shmtx_unlock(&ctx->shpool->mutex);
-    return NGX_OK;
-}
-
-
-ngx_shm_zone_t *
-ngx_http_lua_find_zone(u_char *name_data, size_t name_len)
-{
-    ngx_str_t                       *name;
-    ngx_uint_t                       i;
-    ngx_shm_zone_t                  *zone;
-    volatile ngx_list_part_t        *part;
-
-    part = &ngx_cycle->shared_memory.part;
-    zone = part->elts;
-
-    for (i = 0; /* void */ ; i++) {
-
-        if (i >= part->nelts) {
-            if (part->next == NULL) {
-                break;
-            }
-
-            part = part->next;
-            zone = part->elts;
-            i = 0;
-        }
-
-        name = &zone[i].shm.name;
-
-        dd("name: [%.*s] %d", (int) name->len, name->data, (int) name->len);
-        dd("name2: [%.*s] %d", (int) name_len, name_data, (int) name_len);
-
-        if (name->len == name_len
-            && ngx_strncmp(name->data, name_data, name_len) == 0)
-        {
-            return zone;
-        }
-    }
-
-    return NULL;
-}
-#endif
-
