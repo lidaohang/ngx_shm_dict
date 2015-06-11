@@ -13,6 +13,12 @@
 #define SHM_STRING 4
 #define SHM_NULL 5
 
+#define SHM_OK 0
+#define SHM_ERROR -1
+
+#define NGX_SHM_DICT_EXPIRE			1
+#define NGX_SHM_DICT_EXPIRE_COUNT	1
+
 #pragma pack(push)
 #pragma pack(4)
 
@@ -48,15 +54,13 @@ ngx_shm_zone_t* ngx_shm_dict_init(ngx_conf_t *cf, ngx_str_t* name, size_t size, 
 int ngx_shm_dict_get(ngx_shm_zone_t* zone, ngx_str_t* key,
 		ngx_str_t* data, uint8_t* value_type,uint32_t* exptime,uint32_t* user_flags);
 
-int ngx_shm_dict_get_ex(ngx_shm_zone_t* zone, ngx_str_t* key,
-		ngx_str_t* data, uint8_t* value_type,uint32_t* exptime,uint32_t** user_flags);
 
-int ngx_shm_dict_get_int32(ngx_shm_zone_t* zone, ngx_str_t* key, int32_t* i);
-int ngx_shm_dict_get_int64(ngx_shm_zone_t* zone, ngx_str_t* key, int64_t* i);
-int ngx_shm_dict_get_int64_and_clear(ngx_shm_zone_t* zone,
-				ngx_str_t* key, int64_t* i);
-
+int ngx_shm_dict_set(ngx_shm_zone_t* zone, ngx_str_t* key, ngx_str_t* value,
+			uint8_t value_type, uint32_t exptime, uint32_t user_flags);
+		
 int ngx_shm_dict_delete(ngx_shm_zone_t* zone, ngx_str_t* key);
+
+int ngx_shm_dict_inc_int(ngx_shm_zone_t* zone, ngx_str_t* key,int64_t i,uint32_t exptime, int64_t* ret);
 
 typedef void (*foreach_pt)(ngx_shm_dict_node_t* node, void* extarg);
 
@@ -66,28 +70,11 @@ int ngx_shm_dict_flush_all(ngx_shm_zone_t* zone);
 
 int ngx_shm_dict_flush_expired(ngx_shm_zone_t* zone, int attempts);
 
-int ngx_shm_dict_add(ngx_shm_zone_t* zone, ngx_str_t* key, ngx_str_t* value,
-			uint8_t value_type, uint32_t exptime, uint32_t user_flags);
-
-int ngx_shm_dict_safe_add(ngx_shm_zone_t* zone, ngx_str_t* key, ngx_str_t* value,
-			uint8_t value_type, uint32_t exptime, uint32_t user_flags);
-
-int ngx_shm_dict_replace(ngx_shm_zone_t* zone, ngx_str_t* key, ngx_str_t* value,
-			uint8_t value_type, uint32_t exptime, uint32_t user_flags);
-
-int ngx_shm_dict_set(ngx_shm_zone_t* zone, ngx_str_t* key, ngx_str_t* value,
-			uint8_t value_type, uint32_t exptime, uint32_t user_flags);
-int ngx_shm_dict_safe_set(ngx_shm_zone_t* zone, ngx_str_t* key, ngx_str_t* value,
-			uint8_t value_type, uint32_t exptime, uint32_t user_flags);
-
-int ngx_shm_dict_inc_int(ngx_shm_zone_t* zone, ngx_str_t* key,int64_t i,uint32_t exptime, int64_t* ret);
-
-int ngx_shm_dict_inc_double(ngx_shm_zone_t* zone, ngx_str_t* key,double d,uint32_t exptime,double* ret);
-
 void ngx_str_set_int32(ngx_str_t* key, int32_t* ikey);
 void ngx_str_set_int64(ngx_str_t* key, int64_t* ikey);
 void ngx_str_set_double(ngx_str_t* key, double* value);
 uint32_t ngx_shm_dict_crc32(u_char *p, size_t len);
+char * ngx_strtok_r(char *s, const char *delim, char **last);
 
 #endif
 
