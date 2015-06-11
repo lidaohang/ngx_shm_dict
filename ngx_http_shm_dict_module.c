@@ -12,7 +12,7 @@ static ngx_int_t ngx_shm_dict_list_push(ngx_conf_t *cf,ngx_str_t *name,
 
 static ngx_command_t  ngx_http_shm_dict_commands[] = {
 
-      { ngx_string("ah_shm_dict_zone"),
+      { ngx_string("ngx_shm_dict_zone"),
       NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1|NGX_CONF_TAKE2|NGX_CONF_TAKE3,
       ngx_http_ah_shm_zone,
       0,
