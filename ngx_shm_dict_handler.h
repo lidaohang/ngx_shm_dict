@@ -8,7 +8,11 @@
 
 
 int ngx_shm_dict_handler_get(ngx_shm_zone_t* zone_t,ngx_str_t *key, ngx_str_t *value,uint32_t *exptime);
+
 int ngx_shm_dict_handler_set(ngx_shm_zone_t* zone_t,ngx_str_t *key, ngx_str_t *value,uint32_t exptime);
+
+int ngx_shm_dict_handler_set_exptime(ngx_shm_zone_t* zone_t, ngx_str_t* key, uint32_t exptime);
+
 int ngx_shm_dict_handler_delete(ngx_shm_zone_t* zone_t,ngx_str_t *key);
 int ngx_shm_dict_handler_incr_int(ngx_shm_zone_t* zone_t,ngx_str_t *key, int count,uint32_t exptime,int64_t* res);
 int ngx_shm_dict_handler_flush_all(ngx_shm_zone_t* zone_t);
