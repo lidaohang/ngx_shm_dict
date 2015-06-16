@@ -18,6 +18,7 @@
 
 #define NGX_SHM_DICT_EXPIRE			1
 #define NGX_SHM_DICT_EXPIRE_COUNT	1
+#define NGX_SHM_DICT_MAX_EXPIRE_COUNT	30
 
 #pragma pack(push)
 #pragma pack(4)
@@ -57,6 +58,9 @@ int ngx_shm_dict_get(ngx_shm_zone_t* zone, ngx_str_t* key,
 
 int ngx_shm_dict_set(ngx_shm_zone_t* zone, ngx_str_t* key, ngx_str_t* value,
 			uint8_t value_type, uint32_t exptime, uint32_t user_flags);
+			
+int ngx_shm_dict_set_exptime(ngx_shm_zone_t* zone, ngx_str_t* key,
+			uint32_t exptime);
 		
 int ngx_shm_dict_delete(ngx_shm_zone_t* zone, ngx_str_t* key);
 
