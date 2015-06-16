@@ -404,6 +404,7 @@ ngx_shm_dict_get(ngx_shm_zone_t* zone, ngx_str_t* key,
 	
     ctx = zone->data;
 
+	//todo MAX_KEY_LEN
     if (key->len == 0 || key->len > 65535) {
         return SHM_ERROR;
     }
@@ -548,13 +549,130 @@ ngx_shm_dict_flush_expired(ngx_shm_zone_t* zone, int attempts)
     return freed;
 }
 
+int
+ngx_shm_dict_insert(ngx_shm_dict_ctx_t *ctx, ngx_str_t* key, ngx_str_t* value,
+			uint8_t value_type, uint32_t exptime, uint32_t user_flags,
+			uint32_t  hash) {
 
+	int                          i, size;
+	ngx_rbtree_node_t            *node;
+	ngx_shm_dict_node_t  		 *sd;
+	int						  	 b = 0;
+	ngx_time_t                   *tp;
+	u_char                       *p;
+	
+			
+	size = offsetof(ngx_rbtree_node_t, color)
+        + offsetof(ngx_shm_dict_node_t, data)
+        + key->len
+        + value->len;
+
+    node = ngx_slab_alloc_locked(ctx->shpool, size);
+    if (node == NULL) {
+
+		for (i = 0; i < NGX_SHM_DICT_MAX_EXPIRE_COUNT; i++) {
+            if (ngx_shm_dict_expire(ctx, 0) == 0) {
+                break;
+            }
+
+            node = ngx_slab_alloc_locked(ctx->shpool, size);
+            if (node != NULL) {
+                b = 1;
+                break;
+            }
+        }
+
+		if(!b) {
+			return SHM_ERROR;
+		}
+    }
+
+	sd = (ngx_shm_dict_node_t *) &node->color;
+ 
+	node->key = hash;
+	sd->key_len = key->len;
+
+	if (exptime > 0) {
+		tp = ngx_timeofday();
+		sd->expires = (uint64_t) tp->sec * 1000 + tp->msec
+					  + exptime * 1000;
+
+	} else {
+		sd->expires = 0;
+	}
+
+	sd->user_flags = user_flags;
+	sd->value_len = (uint32_t) value->len;
+	sd->value_type = value_type;
+
+	p = ngx_copy(sd->data, key->data, key->len);
+	ngx_memcpy(p, value->data, value->len);
+
+	ngx_rbtree_insert(&ctx->sh->rbtree, node);
+	ngx_queue_insert_head(&ctx->sh->queue, &sd->queue);
+	
+    return SHM_OK;
+}
+
+
+int ngx_shm_dict_set_exptime(ngx_shm_zone_t* zone, ngx_str_t* key, uint32_t exptime) {
+	
+    uint32_t                     hash;
+    ngx_int_t                    rc;
+    ngx_shm_dict_ctx_t   		 *ctx;
+    ngx_shm_dict_node_t  		 *sd;
+    ngx_time_t                   *tp;
+	
+	assert(zone != NULL);
+	assert(key != NULL);
+	
+	ctx = zone->data;
+ 
+
+    if (key->len == 0 || key->len > 65535) {
+        return SHM_ERROR;
+    }
+
+    hash = ngx_shm_dict_crc32(key->data, key->len);
+	
+    ngx_shmtx_lock(&ctx->shpool->mutex);
+
+#if NGX_SHM_DICT_EXPIRE
+    ngx_shm_dict_expire(ctx, NGX_SHM_DICT_EXPIRE_COUNT);
+#endif
+
+    rc = ngx_shm_dict_lookup(zone, hash, key->data, key->len, &sd);
+	
+	if (rc == NGX_DECLINED || rc == NGX_DONE) {
+		
+		ngx_shmtx_unlock(&ctx->shpool->mutex);
+		
+		return SHM_ERROR;
+	}
+	
+	ngx_queue_remove(&sd->queue);
+	ngx_queue_insert_head(&ctx->sh->queue, &sd->queue);
+
+	if (exptime > 0) {
+	
+		tp = ngx_timeofday();
+		sd->expires = (uint64_t) tp->sec * 1000 + tp->msec
+					  + exptime * 1000;
+	} else {
+		sd->expires = 0;
+	}
+
+	ngx_shmtx_unlock(&ctx->shpool->mutex);
+
+	return SHM_OK;
+}
+
+ 
 int
 ngx_shm_dict_set(ngx_shm_zone_t* zone, ngx_str_t* key, ngx_str_t* value,
 			uint8_t value_type, uint32_t exptime, uint32_t user_flags)
 {
 	
-	int                          i, size;
     uint32_t                     hash;
     ngx_int_t                    rc;
     ngx_shm_dict_ctx_t   		 *ctx;
@@ -575,6 +693,7 @@ ngx_shm_dict_set(ngx_shm_zone_t* zone, ngx_str_t* key, ngx_str_t* value,
     }
 
     hash = ngx_shm_dict_crc32(key->data, key->len);
+
     ngx_shmtx_lock(&ctx->shpool->mutex);
 
 #if NGX_SHM_DICT_EXPIRE
@@ -586,7 +705,14 @@ ngx_shm_dict_set(ngx_shm_zone_t* zone, ngx_str_t* key, ngx_str_t* value,
 	//如果不存在，则插入新的
 	if (rc == NGX_DECLINED || rc == NGX_DONE) {
 		//not exists
-		goto insert;
+		
+		//insert
+		rc = ngx_shm_dict_insert(ctx, key, value, value_type, exptime, user_flags,
+				hash);
+		
+		ngx_shmtx_unlock(&ctx->shpool->mutex);
+
+		return rc;
 	}
 
 //update
@@ -618,7 +744,7 @@ ngx_shm_dict_set(ngx_shm_zone_t* zone, ngx_str_t* key, ngx_str_t* value,
 		return SHM_OK;
 	}
 	
-//remove
+	//remove
 	ngx_queue_remove(&sd->queue);
 
 	node = (ngx_rbtree_node_t *)
@@ -627,59 +753,13 @@ ngx_shm_dict_set(ngx_shm_zone_t* zone, ngx_str_t* key, ngx_str_t* value,
 	ngx_rbtree_delete(&ctx->sh->rbtree, node);
 	ngx_slab_free_locked(ctx->shpool, node);	
 	
-insert:
-  
-    size = offsetof(ngx_rbtree_node_t, color)
-        + offsetof(ngx_shm_dict_node_t, data)
-        + key->len
-        + value->len;
-
-    node = ngx_slab_alloc_locked(ctx->shpool, size);
-    if (node == NULL) {
-
-        for (i = 0; i < 30; i++) {
-            if (ngx_shm_dict_expire(ctx, 0) == 0) {
-                break;
-            }
-
-            node = ngx_slab_alloc_locked(ctx->shpool, size);
-            if (node == NULL) {
-                goto allocated;
-            }
-        }
-		
-        ngx_shmtx_unlock(&ctx->shpool->mutex);
-		return SHM_ERROR;
-    }
-
-allocated:
-    sd = (ngx_shm_dict_node_t *) &node->color;
- 
-    node->key = hash;
-    sd->key_len = key->len;
-
-    if (exptime > 0) {
-        tp = ngx_timeofday();
-        sd->expires = (uint64_t) tp->sec * 1000 + tp->msec
-                      + exptime * 1000;
-
-    } else {
-        sd->expires = 0;
-    }
-
-    sd->user_flags = user_flags;
-    sd->value_len = (uint32_t) value->len;
-    sd->value_type = value_type;
-
-    p = ngx_copy(sd->data, key->data, key->len);
-    ngx_memcpy(p, value->data, value->len);
-
-    ngx_rbtree_insert(&ctx->sh->rbtree, node);
-    ngx_queue_insert_head(&ctx->sh->queue, &sd->queue);
+	//insert
+	rc = ngx_shm_dict_insert(ctx, key, value, value_type, exptime, user_flags,
+			hash);
 	
     ngx_shmtx_unlock(&ctx->shpool->mutex);
 
-    return SHM_OK;
+    return rc;
 }
 
 
