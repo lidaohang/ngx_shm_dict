@@ -45,8 +45,8 @@ git clone https://github.com/lidaohang/ngx_shm_dict_view		查看共享内存
 
 processes {
 
-	process shm_dict_manager {
-	    ah_shm_dict_name test;
+	process ngx_shm_dict_manager {
+	    ngx_shm_dict_name test;
 	    interval 3s;
 	
 	    delay_start 300ms;
