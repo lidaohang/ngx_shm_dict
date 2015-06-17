@@ -3,6 +3,7 @@ nginx共享内存
 
 根据配置文件来动态的添加共享内存。
 
+```
 
 ngx_shm_dict
  共享内存核心模块(红黑树，队列)
@@ -13,6 +14,8 @@ ngx_shm_dict_manager
 
 ngx_shm_dict_view
  共享内存查看
+ 
+```
 
 ## Install
 
