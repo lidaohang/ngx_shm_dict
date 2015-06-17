@@ -3,14 +3,14 @@ nginx共享内存
 
 根据配置文件来动态的添加共享内存。
 
-##ngx_shm_dict
+ngx_shm_dict
 共享内存核心模块(红黑树，队列)
 
-##ngx_shm_dict_manager
+ngx_shm_dict_manager
 添加定时器事件，定时的清除共享内存中过期的key
 添加读事件，支持redis协议，通过redis-cli get,set,del,ttl
 
-#ngx_shm_dict_view
+ngx_shm_dict_view
 共享内存查看
  
 
