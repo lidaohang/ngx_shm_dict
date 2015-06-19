@@ -8,7 +8,7 @@ static ngx_int_t ngx_shm_dict_list_repeat_loading(ngx_conf_t *cf,
 static ngx_int_t ngx_shm_dict_list_push(ngx_conf_t *cf,ngx_str_t *name,
 		ssize_t size);
 
-
+ngx_array_t *g_shm_dict_list;
 
 static ngx_command_t  ngx_http_shm_dict_commands[] = {
 
