@@ -8,6 +8,6 @@
 #include "ngx_shm_dict.h"
 
 
-ngx_array_t *g_shm_dict_list;
+extern ngx_array_t *g_shm_dict_list;
 
 #endif
